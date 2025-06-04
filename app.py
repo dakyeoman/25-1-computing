@@ -1,11 +1,11 @@
-"""
-카페 창업 입지 추천 시스템 - Streamlit Web App
-반응형 디자인 & 상세 분석 통합 버전
 
-실행 방법:
-1. pip install streamlit pandas plotly
-2. streamlit run cafe_app.py
-"""
+import asyncio
+import sys
+
+# Python 3.13 asyncio 호환성 문제 해결
+if sys.version_info >= (3, 13):
+    import nest_asyncio
+    nest_asyncio.apply()
 
 import streamlit as st
 import pandas as pd
@@ -15,12 +15,16 @@ from datetime import datetime
 import time
 
 # 메인 코드 임포트 (main__.py가 같은 디렉토리에 있다고 가정)
-from main__ import (
-    CafeLocationOptimizer, UserPreferences, Config,
-    GenderTarget, CompetitionLevel, SubwayPreference,
-    PeakTime, WeekdayPreference, PriceRange,
-    format_korean_number
-)
+try:
+    from main__ import (
+        CafeLocationOptimizer, UserPreferences, Config,
+        GenderTarget, CompetitionLevel, SubwayPreference,
+        PeakTime, WeekdayPreference, PriceRange,
+        format_korean_number
+    )
+except ImportError as e:
+    st.error(f"main__.py 파일을 찾을 수 없습니다: {e}")
+    st.stop()
 
 # 페이지 설정
 st.set_page_config(
@@ -237,7 +241,7 @@ if 'optimizer' not in st.session_state:
 
 # 헤더
 st.markdown('<h1 class="main-header">☕ 카페 창업 입지 추천 시스템</h1>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header"></p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-header">서울시 빅데이터 기반 최적 카페 창업 입지 분석</p>', unsafe_allow_html=True)
 
 # 데이터 경로 설정
 data_paths = {
@@ -1147,8 +1151,9 @@ if not st.session_state.data_loaded:
     # 초기 화면 - 로딩 전 환영 메시지
     st.markdown("""
     <div style="text-align: center; padding: 3rem 0;">
-        <h1 style="font-size: 3rem; margin-bottom: 2rem;"></h1>
+        <h1 style="font-size: 3rem; margin-bottom: 2rem;">👋 환영합니다!</h1>
         <p style="font-size: 1.2rem; color: #666; margin-bottom: 3rem;">
+            서울시 빅데이터를 기반으로 최적의 카페 창업 입지를 찾아드립니다.
         </p>
     </div>
     """, unsafe_allow_html=True)
