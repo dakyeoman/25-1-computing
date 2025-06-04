@@ -190,9 +190,39 @@ st.markdown("""
         color: inherit !important;
     }
     
-    /* Success, Info, Warning 박스 텍스트 색상 강제 */
-    div[data-testid="stAlert"] > div {
-        color: #333 !important;
+    /* Streamlit 기본 컴포넌트 텍스트 색상 강제 오버라이드 */
+    .stAlert > div {
+        color: #262730 !important;
+    }
+    
+    /* Info 박스 특별 처리 */
+    div[data-baseweb="notification"][kind="info"] {
+        background-color: #E3F2FD !important;
+        color: #1565C0 !important;
+    }
+    
+    div[data-baseweb="notification"][kind="info"] div {
+        color: #1565C0 !important;
+    }
+    
+    /* Success 박스 */
+    div[data-baseweb="notification"][kind="positive"] {
+        background-color: #E8F5E9 !important;
+        color: #2E7D32 !important;
+    }
+    
+    div[data-baseweb="notification"][kind="positive"] div {
+        color: #2E7D32 !important;
+    }
+    
+    /* Warning 박스 */
+    div[data-baseweb="notification"][kind="warning"] {
+        background-color: #FFF3E0 !important;
+        color: #E65100 !important;
+    }
+    
+    div[data-baseweb="notification"][kind="warning"] div {
+        color: #E65100 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -207,7 +237,7 @@ if 'optimizer' not in st.session_state:
 
 # 헤더
 st.markdown('<h1 class="main-header">☕ 카페 창업 입지 추천 시스템</h1>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header">서울시 빅데이터 기반 최적 카페 창업 입지 분석</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-header"></p>', unsafe_allow_html=True)
 
 # 데이터 경로 설정
 data_paths = {
@@ -1117,9 +1147,8 @@ if not st.session_state.data_loaded:
     # 초기 화면 - 로딩 전 환영 메시지
     st.markdown("""
     <div style="text-align: center; padding: 3rem 0;">
-        <h1 style="font-size: 3rem; margin-bottom: 2rem;">👋 환영합니다!</h1>
+        <h1 style="font-size: 3rem; margin-bottom: 2rem;"></h1>
         <p style="font-size: 1.2rem; color: #666; margin-bottom: 3rem;">
-            서울시 빅데이터를 기반으로 최적의 카페 창업 입지를 찾아드립니다.
         </p>
     </div>
     """, unsafe_allow_html=True)
