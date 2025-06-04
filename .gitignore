@@ -1,4 +1,20 @@
 __pycache__
 .venv
+
 .DS_Store
-생활이동_행정동_202504/
+LOCAL_PEOPLE_DONG_202504.csv 
+법행정동매핑.csv 
+서울시 상권분석서비스(점포-행정동)_2024년.csv 
+서울시 상권분석서비스(추정매출-행정동)_2024년.csv 
+서울시 행정동별 지하철 총 승차 승객수 정보.csv 
+app.py 
+LOCAL_PEOPLE_DONG_202501.csv 
+LOCAL_PEOPLE_DONG_202502.csv 
+LOCAL_PEOPLE_DONG_202503.csv
+seoul_purpose_admdong4_in_20250424.csv 
+seoul_purpose_admdong4_in_20250425.csv 
+seoul_purpose_admdong4_in_20250426.csv 
+seoul_purpose_admdong4_in_20250427.csv 
+seoul_purpose_admdong4_in_20250428.csv 
+seoul_purpose_admdong4_in_20250429.csv 
+seoul_purpose_admdong4_in_20250430.csv
