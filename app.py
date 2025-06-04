@@ -322,6 +322,26 @@ def load_data():
                 st.error(f"❌ 데이터 로드 실패: {str(e)}")
                 st.stop()
 
+def format_number_for_display(value, type="currency"):
+    """숫자를 사용자 친화적으로 포맷팅"""
+    if type == "currency":
+        if value >= 100000000:  # 1억 이상
+            return f"{value/100000000:.1f}억원"
+        elif value >= 10000000:  # 1천만원 이상
+            return f"{value/10000000:.1f}천만원"
+        elif value >= 10000:  # 1만원 이상
+            return f"{value/10000:.0f}만원"
+        else:
+            return f"{value:,.0f}원"
+    elif type == "count":
+        return f"{int(value):,}개"
+    elif type == "percent":
+        return f"{value:.1f}%"
+    elif type == "price":
+        return f"{int(value):,}원"
+    else:
+        return f"{value:,.0f}"
+
 def create_user_preferences():
     """사용자 설정을 UserPreferences 객체로 변환"""
     preferences = UserPreferences()
@@ -500,10 +520,10 @@ def display_recommendations_with_details():
             cols = st.columns(metrics_cols)
             
             metrics = [
-                ("💰 월평균 매출", rec.format_revenue(rec.avg_revenue_per_store).split('(')[0]),
-                ("🏪 카페 수", f"{rec.store_count}개"),
+                ("💰 월매출", format_number_for_display(rec.avg_revenue_per_store, "currency")),
+                ("🏪 카페", f"{rec.store_count}개"),
                 ("📉 폐업률", f"{rec.closure_rate*100:.1f}%"),
-                ("🚇 지하철", "⭕ 있음" if rec.subway_access else "❌ 없음")
+                ("🚇 지하철", "있음" if rec.subway_access else "없음")
             ]
             
             for idx, (label, value) in enumerate(metrics):
@@ -536,12 +556,12 @@ def display_detailed_analysis(rec, rank):
     with col1:
         # 매출 정보
         revenue_data = {
-            "구분": ["전체 월매출", "점포당 평균", "일평균 매출", "평균 객단가"],
+            "구분": ["전체 매출", "점포당 매출", "일 평균", "객단가"],
             "금액": [
-                rec.format_revenue(rec.total_revenue),
-                rec.format_revenue(rec.avg_revenue_per_store),
-                rec.format_revenue(rec.avg_revenue_per_store / 30),
-                f"{rec.avg_price:,.0f}원"
+                format_number_for_display(rec.total_revenue, "currency"),
+                format_number_for_display(rec.avg_revenue_per_store, "currency"),
+                format_number_for_display(rec.avg_revenue_per_store / 30, "currency"),
+                format_number_for_display(rec.avg_price, "price")
             ]
         }
         
@@ -653,16 +673,16 @@ def generate_location_insights(rec):
     insights = []
     
     # 매출 인사이트
-    if rec.avg_revenue_per_store > 30000 * 10000:  # 3억원 이상
+    if rec.avg_revenue_per_store >= 30000 * 10000:  # 3억원 이상
         insights.append({
             'icon': '🚀',
-            'text': '이 지역은 높은 매출을 기록하고 있는 프리미엄 상권입니다. 고급 콘셉트의 카페가 유리합니다.',
+            'text': f'이 지역은 <b>{format_number_for_display(rec.avg_revenue_per_store, "currency")}</b>의 높은 매출을 기록하는 프리미엄 상권입니다.',
             'type': 'success'
         })
     elif rec.avg_revenue_per_store < 10000 * 10000:  # 1억원 미만
         insights.append({
             'icon': '💡',
-            'text': '상대적으로 매출이 낮은 지역입니다. 원가 관리와 효율적 운영이 중요합니다.',
+            'text': f'월 매출이 <b>{format_number_for_display(rec.avg_revenue_per_store, "currency")}</b>로 상대적으로 낮습니다. 원가 관리가 중요합니다.',
             'type': 'warning'
         })
     
@@ -788,7 +808,20 @@ def display_comparison():
             size='종합 점수',
             color='지역',
             title='경쟁 환경 vs 매출',
-            hover_data=['객단가', '폐업률']
+            hover_data={
+                '객단가': ':,',
+                '폐업률': ':.1f',
+                '카페 수': ':,',
+                '월평균 매출': ':,.0f',
+                '종합 점수': ':.1f'
+            },
+            labels={
+                '카페 수': '카페 수 (개)',
+                '월평균 매출': '월평균 매출 (만원)',
+                '객단가': '객단가 (원)',
+                '폐업률': '폐업률 (%)',
+                '종합 점수': '점수'
+            }
         )
         fig2.update_layout(height=400)
         st.plotly_chart(fig2, use_container_width=True)
@@ -802,12 +835,15 @@ def display_comparison():
     
     colors = ['#1976D2', '#FF6B6B', '#4ECDC4']
     
+    # 최대값 찾기 (정규화용)
+    max_revenue = max(r.avg_revenue_per_store for r in st.session_state.recommendations[:3])
+    
     for i, rec in enumerate(st.session_state.recommendations[:3]):
         # 각 지표 정규화 (0-100)
         values = [
-            min(rec.avg_revenue_per_store / 500000000 * 100, 100),  # 매출력
+            (rec.avg_revenue_per_store / max_revenue) * 100,  # 매출력 (상대 비교)
             (1 - rec.closure_rate) * 100,  # 안정성
-            max(100 - min(rec.store_count / 50 * 100, 100), 0),  # 경쟁우위
+            max(100 - (rec.store_count / 50 * 100), 0),  # 경쟁우위
             rec.female_ratio * 100,  # 고객매력 (여성비율 기준)
             100 if rec.subway_access else 50  # 접근성
         ]
@@ -844,10 +880,10 @@ def display_comparison():
     
     # 테이블 데이터 포맷팅
     comparison_df = df.copy()
-    comparison_df['월평균 매출'] = comparison_df['월평균 매출'].apply(lambda x: f"{x:,.0f}만원")
+    comparison_df['월평균 매출'] = comparison_df['월평균 매출'].apply(lambda x: format_number_for_display(x*10000, "currency"))
     comparison_df['폐업률'] = comparison_df['폐업률'].apply(lambda x: f"{x:.1f}%")
     comparison_df['여성 비율'] = comparison_df['여성 비율'].apply(lambda x: f"{x:.0f}%")
-    comparison_df['객단가'] = comparison_df['객단가'].apply(lambda x: f"{x:,.0f}원")
+    comparison_df['객단가'] = comparison_df['객단가'].apply(lambda x: format_number_for_display(x, "price"))
     comparison_df['종합 점수'] = comparison_df['종합 점수'].apply(lambda x: f"{x:.1f}점")
     
     # 순위 열 제거 (이미 정렬되어 있음)
@@ -889,7 +925,7 @@ def display_insights():
         avg_revenue = sum(r.avg_revenue_per_store for r in st.session_state.recommendations) / len(st.session_state.recommendations)
         st.metric(
             "평균 예상 매출",
-            format_korean_number(int(avg_revenue)).split('(')[0],
+            format_number_for_display(avg_revenue, "currency"),
             help="추천 지역들의 평균 월매출"
         )
     
@@ -913,7 +949,7 @@ def display_insights():
         <div class="insight-box success-box">
             🏆 <b>최우수 추천 지역</b><br>
             {top_rec.dong_name}({top_rec.gu_name})이(가) 종합 1위입니다. 
-            월평균 {format_korean_number(int(top_rec.avg_revenue_per_store))}의 매출이 예상되며, 
+            월평균 <b>{format_number_for_display(top_rec.avg_revenue_per_store, "currency")}</b>의 매출이 예상되며, 
             {'지하철역이 있어 접근성이 우수합니다.' if top_rec.subway_access else '도보 고객 위주의 상권입니다.'}
         </div>
         """, unsafe_allow_html=True)
@@ -924,7 +960,7 @@ def display_insights():
             st.markdown(f"""
             <div class="insight-box info-box">
                 💰 <b>최고 매출 지역</b><br>
-                {top_revenue.dong_name}이(가) 가장 높은 매출({format_korean_number(int(top_revenue.avg_revenue_per_store))})을 
+                {top_revenue.dong_name}이(가) 가장 높은 매출(<b>{format_number_for_display(top_revenue.avg_revenue_per_store, "currency")}</b>)을 
                 기록하고 있습니다. 프리미엄 전략이 유효한 지역입니다.
             </div>
             """, unsafe_allow_html=True)
