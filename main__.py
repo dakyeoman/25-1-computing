@@ -1327,6 +1327,13 @@ class CafeLocationOptimizer:
             'stores': StoreDataLoader(self.config)
         }
     
+    def _safe_float(self, value: Any, default: float = 0.0) -> float:
+        """안전한 float 변환"""
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return default
+    
     def load_data(self, data_paths: Dict[str, str]) -> None:
         """모든 데이터 로드"""
         print("\n" + "="*60)
@@ -1366,25 +1373,236 @@ class CafeLocationOptimizer:
         self._print_data_summary()
     
     def _load_subway_data(self, filepath: str) -> None:
-        """지하철 데이터 간단 로드"""
-        # 실제 구현에서는 별도 로더 클래스로 분리 가능
+        """지하철 데이터 로드"""
         if not os.path.exists(filepath):
             self.logger.warning(f"지하철 데이터 파일이 없습니다: {filepath}")
             return
         
-        # 간단히 처리 (상세 구현 생략)
-        self.logger.info("지하철 데이터 로드 완료")
+        # CSV 파일 읽기
+        df = None
+        for encoding in self.config.encodings:
+            try:
+                df = pd.read_csv(filepath, encoding=encoding)
+                self.logger.info(f"지하철 데이터 파일 로드 성공 (encoding: {encoding})")
+                break
+            except Exception as e:
+                self.logger.debug(f"인코딩 실패 {encoding}: {e}")
+                continue
+        
+        if df is None:
+            self.logger.error(f"지하철 데이터 파일 로드 실패: {filepath}")
+            return
+        
+        # 컬럼명 정리
+        df.columns = df.columns.str.strip()
+        
+        # 디버깅: 데이터 확인
+        self.logger.info(f"지하철 데이터 shape: {df.shape}")
+        self.logger.info(f"지하철 데이터 컬럼: {list(df.columns)}")
+        self.logger.info(f"첫 5개 행:\n{df.head()}")
+        
+        # 행정동 코드 컬럼 찾기 - 매우 유연하게
+        dong_col = None
+        dong_candidates = []
+        
+        for col in df.columns:
+            col_lower = col.lower()
+            col_no_space = col.replace(' ', '').replace('_', '')
+            
+            # 우선순위 1: 정확한 매칭
+            if col in ['행정동코드', '행정동_코드', 'admdong_cd', 'dong_code', '동코드']:
+                dong_col = col
+                break
+            # 우선순위 2: 부분 매칭
+            elif ('행정' in col and '동' in col) or ('dong' in col_lower and 'cd' in col_lower):
+                dong_candidates.append(col)
+            elif '동코드' in col_no_space or 'dongcode' in col_lower.replace(' ', ''):
+                dong_candidates.append(col)
+        
+        # 후보 중에서 선택
+        if not dong_col and dong_candidates:
+            dong_col = dong_candidates[0]
+        
+        # 승객수 컬럼 찾기 - 매우 유연하게
+        passenger_col = None
+        passenger_candidates = []
+        
+        for col in df.columns:
+            col_lower = col.lower()
+            col_no_space = col.replace(' ', '').replace('_', '')
+            
+            # 우선순위 1: 정확한 매칭
+            if col in ['승차인원', '총승차인원', '승객수', '총승객수', '승차_인원', '총_승차_인원']:
+                passenger_col = col
+                break
+            # 우선순위 2: 부분 매칭
+            elif '승차' in col or '승객' in col or '인원' in col:
+                passenger_candidates.append(col)
+            elif 'passenger' in col_lower or 'boarding' in col_lower:
+                passenger_candidates.append(col)
+        
+        # 후보 중에서 선택 (숫자 데이터가 있는 컬럼 우선)
+        if not passenger_col and passenger_candidates:
+            for candidate in passenger_candidates:
+                if df[candidate].dtype in ['int64', 'float64']:
+                    passenger_col = candidate
+                    break
+            if not passenger_col:
+                passenger_col = passenger_candidates[0]
+        
+        # 만약 못 찾았으면 숫자형 컬럼 중에서 찾기
+        if not passenger_col:
+            numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
+            if len(numeric_cols) > 0:
+                # 행정동 코드가 아닌 첫 번째 숫자 컬럼
+                for col in numeric_cols:
+                    if col != dong_col:
+                        passenger_col = col
+                        break
+        
+        if not dong_col:
+            self.logger.error(f"행정동 코드 컬럼을 찾을 수 없습니다.")
+            self.logger.error(f"가능한 컬럼: {list(df.columns)}")
+            return
+        
+        if not passenger_col:
+            self.logger.error(f"승객수 컬럼을 찾을 수 없습니다.")
+            self.logger.error(f"가능한 컬럼: {list(df.columns)}")
+            return
+        
+        self.logger.info(f"선택된 컬럼 - 행정동: '{dong_col}', 승객수: '{passenger_col}'")
+        
+        # 지하철 데이터 처리
+        subway_count = 0
+        error_count = 0
+        
+        for idx, row in df.iterrows():
+            try:
+                dong_code = str(row[dong_col]).strip()
+                
+                # 행정동 코드 정제
+                if dong_code == 'nan' or dong_code == '' or pd.isna(row[dong_col]):
+                    continue
+                
+                # 숫자만 있는 경우 처리
+                if dong_code.isdigit():
+                    # 8자리 또는 10자리가 아니면 스킵
+                    if len(dong_code) not in [8, 10]:
+                        continue
+                
+                passengers = self._safe_float(row[passenger_col])
+                
+                if passengers > 0:
+                    # 다양한 형태로 저장
+                    self.data_store.subway_data[dong_code] = True
+                    
+                    # 10자리면 8자리도 저장
+                    if len(dong_code) == 10:
+                        self.data_store.subway_data[dong_code[:8]] = True
+                    
+                    subway_count += 1
+                    
+                    # 처음 몇 개 로그
+                    if subway_count <= 3:
+                        self.logger.debug(f"지하철 데이터 추가: {dong_code} = {passengers:,.0f}명")
+                        
+            except Exception as e:
+                error_count += 1
+                if error_count <= 3:
+                    self.logger.debug(f"행 {idx} 처리 오류: {e}")
+                continue
+        
+        self.logger.info(f"지하철 데이터 로드 완료: {subway_count}개 행정동 (오류: {error_count}개)")
+        
+        # 데이터가 없으면 상세 정보 출력
+        if subway_count == 0:
+            self.logger.warning("지하철 데이터가 하나도 로드되지 않았습니다.")
+            self.logger.warning(f"데이터 타입 - {dong_col}: {df[dong_col].dtype}, {passenger_col}: {df[passenger_col].dtype}")
+            self.logger.warning(f"샘플 데이터:\n{df[[dong_col, passenger_col]].head(10)}")
     
     def _load_population_data(self, file_list: List[str]) -> None:
-        """생활인구 데이터 간단 로드"""
-        # 실제 구현에서는 별도 로더 클래스로 분리 가능
+        """생활인구 데이터 로드"""
         valid_files = [f for f in file_list if os.path.exists(f)]
         if not valid_files:
             self.logger.warning("생활인구 데이터 파일이 없습니다")
             return
         
-        # 간단히 처리 (상세 구현 생략)
-        self.logger.info(f"{len(valid_files)}개 생활인구 데이터 파일 로드")
+        total_loaded = 0
+        
+        for filepath in valid_files:
+            # CSV 파일 읽기
+            df = None
+            for encoding in self.config.encodings:
+                try:
+                    df = pd.read_csv(filepath, encoding=encoding)
+                    break
+                except Exception:
+                    continue
+            
+            if df is None:
+                self.logger.warning(f"파일 로드 실패: {filepath}")
+                continue
+            
+            # 컬럼명 정리
+            df.columns = df.columns.str.strip()
+            
+            # 필요한 컬럼 찾기
+            dong_col = None
+            total_col = None
+            female_cols = []
+            male_cols = []
+            
+            for col in df.columns:
+                if '행정동' in col and '코드' in col:
+                    dong_col = col
+                elif '총생활인구수' in col or '생활인구' in col:
+                    total_col = col
+                elif '여성' in col and any(age in col for age in ['20대', '30대', '40대', '50대']):
+                    female_cols.append(col)
+                elif '남성' in col and any(age in col for age in ['20대', '30대', '40대', '50대']):
+                    male_cols.append(col)
+            
+            if not dong_col:
+                self.logger.warning(f"행정동 코드 컬럼을 찾을 수 없습니다: {filepath}")
+                continue
+            
+            # 생활인구 데이터 처리
+            for _, row in df.iterrows():
+                dong_code = str(row[dong_col]).strip()
+                
+                # 기존 데이터가 있으면 누적
+                if dong_code not in self.data_store.population_data:
+                    self.data_store.population_data[dong_code] = PopulationData(
+                        total_population=0,
+                        female_20_50=0,
+                        male_20_50=0
+                    )
+                
+                pop_data = self.data_store.population_data[dong_code]
+                
+                # 총 생활인구
+                if total_col:
+                    pop_data.total_population += self._safe_float(row.get(total_col, 0))
+                
+                # 20-50대 여성
+                for col in female_cols:
+                    pop_data.female_20_50 += self._safe_float(row.get(col, 0))
+                
+                # 20-50대 남성
+                for col in male_cols:
+                    pop_data.male_20_50 += self._safe_float(row.get(col, 0))
+            
+            total_loaded += 1
+            self.logger.info(f"생활인구 파일 로드: {os.path.basename(filepath)}")
+        
+        # 평균값으로 변환 (여러 파일의 평균)
+        if total_loaded > 0:
+            for dong_code, pop_data in self.data_store.population_data.items():
+                pop_data.total_population /= total_loaded
+                pop_data.female_20_50 /= total_loaded
+                pop_data.male_20_50 /= total_loaded
+        
+        self.logger.info(f"생활인구 데이터 로드 완료: {len(self.data_store.population_data)}개 행정동 ({total_loaded}개 파일)")
     
     def _load_od_data(self, folder_list: List[str]) -> None:
         """OD 데이터 로드 및 네트워크 구축"""
