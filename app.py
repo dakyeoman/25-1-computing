@@ -1,11 +1,11 @@
+"""
+카페 창업 입지 추천 시스템 - Streamlit Web App
+반응형 디자인 & 상세 분석 통합 버전
 
-import asyncio
-import sys
-
-# Python 3.13 asyncio 호환성 문제 해결
-if sys.version_info >= (3, 13):
-    import nest_asyncio
-    nest_asyncio.apply()
+실행 방법:
+1. pip install streamlit pandas plotly
+2. streamlit run cafe_app.py
+"""
 
 import streamlit as st
 import pandas as pd
@@ -13,6 +13,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 import time
+import os
+import sys
 
 # 메인 코드 임포트 (main__.py가 같은 디렉토리에 있다고 가정)
 try:
@@ -23,7 +25,14 @@ try:
         format_korean_number
     )
 except ImportError as e:
-    st.error(f"main__.py 파일을 찾을 수 없습니다: {e}")
+    st.error(f"""
+    ⚠️ main__.py 파일을 찾을 수 없습니다.
+    
+    현재 디렉토리: {os.getcwd()}
+    파일 목록: {os.listdir()}
+    
+    에러: {e}
+    """)
     st.stop()
 
 # 페이지 설정
