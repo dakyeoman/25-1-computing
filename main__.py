@@ -6,9 +6,6 @@ Maximum Flow 알고리즘과 파레토 최적화를 활용한 서울시 카페 �
 - 다목적 최적화를 통한 균형잡힌 입지 추천
 - 사용자 맞춤형 필터링 시스템
 
-Author: Seoul Data Analysis Team
-Version: 2.0
-Last Updated: 2024-12
 """
 
 import pandas as pd
